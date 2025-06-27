@@ -22,7 +22,7 @@ b {
 }
 
 mark {
-  background-color: #8397ff;
+  background-color: #8397ffbf;
   color: #5ff2ff;
 }
 
@@ -43,7 +43,7 @@ nav {
   gap: 30px;
 }
 
-.nav-title{
+.nav-title {
   margin-left: 15px;
   margin-right: 15px;
   color: #45abff;
