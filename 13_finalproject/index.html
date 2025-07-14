@@ -23,7 +23,102 @@
 <div class="textcontainer">
 <p class="margin"></p>
 
-<h3>Final Project: [INSERT FINAL PROJECT HERE]</h3>
+<h3>Final Project: Live Tuner</h3>
+a device to tell you whether are sharp or flat while playing a song<br>
+<br>
+Timeline:<br>
+<div class="indent">
+  1.) pitch detection
+  <div class="indent">
+    -  FFT (currently preferred): might slow down the microcontroller, may not give enough precision<br>
+    -  stroboscopic tuner: requires fast (~3300 rpm at low end), precise, and quickly adjustable spinning wheel, purely physical output, harder to interpret output<br>
+  </div>
+  2.) reading out a music file
+  <div class="indent">
+    -  where is it stored?: does the microcontroller have storage or is an external device (flash stick, SD card, etc.) needed <br>
+    -  probably midi<br>
+    -  could make custom format (likely impractical)<br>
+  </div>
+  2.1) combining pitch detection with the read music file<br>
+  3.) song playback systems:
+  <div class="indent">
+    -  pause & resume<br>
+    -  restart<br>
+  </div>
+  note: 4 & 5's order is dependent on in whatever order is convenient & isn't set in stone<br>
+  4.) finalize & sauder the circuitry
+  <div class="indent">
+    -  battery<br>
+    -  inputs:
+    <div class="indent">
+      -  pause/resume/play/select: button<br>
+      -  navigation (left/up, right/down, back): buttons, if menus or timeline scanning are implemented<br>
+      -  microphone<br>
+      -  power & data: usb<br>
+    </div>
+    -  outputs:
+    <div class="indent">
+      -  screen<br>
+      -  pitch indicator (assuming not using a stroboscopic tuner)<br>
+      <div class="indent">
+        - 3 LEDS: flat, on pitch, sharp with varying brightness<br>
+        - needle: digital or physical<br>
+      </div>
+    </div>
+  </div>
+  5.) mockup of device's case
+  <div class="indent">
+    -  majority could be laser cut (probably wood)<br>
+    -  front could be printed so that it has PIP buttons<br>
+  </div>
+  6.) general debugging, optimization, & tweaking<br>
+  bonus features (if I have time):
+  <div class="indent">
+    -  song selection (of multiple stored)<br>
+    -  settings:<br>
+    <div class="indent">
+      - tuning sensitivity<br>
+    </div>
+    -  metronome<br>
+    -  simple playback of audio<br>
+    -  simple pitch tuning, not tied to a song<br>
+    -  timeline scanning: should lock to measures<br>
+  </div>
+</div><br>
+Bill of materials
+<div class="indent">
+  device case:<br>
+  <div class="indent">
+    -  primarily wood<br>
+    -  potentially plastic (PLA) front<br>
+    -  probably screwed together
+  </div>
+  circuitry:<br>
+  <div class="indent">
+    -  solderable breadboard<br>
+    -  wires<br>
+    -  microcontroller: esp32 dev module<br>
+    -  storage device (flash stick, SD card, etc) & reader if needed<br>
+    -  rechargeable battery (small)<br>
+    -  inputs:<br>
+    <div class="indent">
+      - microphone<br>
+      - 1-4 (depending on need of navigation) buttons<br>
+      - usb (part of microcontroller)<br>
+    </div>
+    -  outputs<br>
+    <div class="indent">
+      -  screen (small)<br>
+      -  pitch indicator (1 of the following):<br>
+      <div class="indent">
+        -  3 LEDS<br>
+        -  physical needle (wood, PLA, or maybe metal) & servo<br>
+        -  digital needle (part of the screen)<br>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 
 </div>
