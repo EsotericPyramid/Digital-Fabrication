@@ -86,7 +86,7 @@ The little SPH0645 mic I was using took forever to get running, having to switch
 proper readings, it wasn't that hard to basic operations on them. For now, I stuck to simply measuring volume which seems to have worked. Since the
 value jumps around across various orders of magnitude, the following measurements are all log base 2 of the raw measurement. Measuring in my bedroom, the baseline is about 19,
 the max from directly tapping the mic is about 30, from singing directly into it is about 30, and from singing to it on my desk is about 25. Being a bit more
-analytical, heres some volume readings I got when placing my phone playing A4 (440 hz, sine wave) from a tone generator website on my phone at max volume at various distances (in cm):<br>
+analytical, heres some volume readings I got when placing my phone playing A4 (440 hz, sine wave) from a <a href="https://www.szynalski.com/tone-generator/" target="_blank">tone generator website</a> on my phone at max volume at various distances (in cm):<br>
 <iframe src="https://www.desmos.com/calculator/lpmhjucxvu?embed" width="100%" style="aspect-ratio: 3/2; border: 1px solid #ccc;" frameborder=0></iframe><br>
 And here is the code:
 <pre><p class="code_background"><code>#include &lt;ESP_I2S.h&gt;
