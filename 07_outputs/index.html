@@ -29,6 +29,27 @@
 
 <h4>Assignment: Minimum Viable Product for Final Project</h4>
 
+For my final project of a live tuner, I had to produce just a pitch detector for the Minimum viable product.
+After the pain of getting the mic last time, all I had to do now was to analyze the samples for a pitch and output those to a screen.<br>
+<br>
+The pitch analysis ended up being far more annoying than I anticipated, mostly because of overtones / harmonics, additional frequencies 
+present in a sound other than the fundamental frequency (the pitch I'm looking for). If one of these overtones is too strong,
+it can end up hiding the fundamental frequency, resulting in me detecting the wrong pitch. As such, I experimented with four
+different pitch detection methods: a basic Fourier Transform by itself, a Cepstrum, Harmonic spectrum Product, and YIN&ast;. In the end,
+of those 4, YIN was the most accurate but far too slow. After YIN, a basic Fourier Transform was the best and more than fast enough. 
+I may want to experiment a bit more with non-frequency spectrum based methods since YIN showed so much promise and I may want to smooth
+out readings to help stabilize them and prevent them from jumping between harmonics.<br>
+<br>
+The screen on the other hand was fairly painless other than struggling to get it to display because of having to "begin" the screen
+during the setup function because apparantly doing it in a class constructed before the setup function doesn't work. As part of the 
+assignment, I also measured how the Esp32 was communicating with it. On the SCL pin (clock), it simply repeated High and Low in roughly equal proportions
+with a total period of about 2600 ns for about 385 khz. The SDA pin (data) was usually low with occasional pulses of high which were sometimes chained 
+together. Each high pulse was also about 2600 ns so again about 385 khz. <br>
+<img src="clock_o_scope.jpeg" width="100%"><br>
+<br>
+&ast;<div class="indent">the specific YIN algorithm implementation was copied under the GNU General Public License version 2, 
+only being lightly modified where indicated, it is included in the source download alongside the license.</div>
+
 
 </div>
 </xmp>
