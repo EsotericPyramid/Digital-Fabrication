@@ -12,7 +12,7 @@
       <h2 class="nav-title">Digital Fabrication - Summer 2025</h2>
     </div>
     <div class="navbar-nav">
-      <h4><a class="nav-link" href="../index.html">Home</a></h4>
+      <h4><a class="nav-link" href="../index.html">Home</a></h4> 
       <h4><a class="nav-link" href="../about.html">About</a></h4>
     </div>
   </div>
@@ -25,15 +25,499 @@
 
 <h3>Day 9: Radio, WiFi, Bluetooth (IoT)</h3>
 
+<h4>Assignment: Remote MIDI File Decoder</h4>
+For my IOT assignment I decided to make a remote (on the ESP32) MIDI File Decoder transporting
+data both ways through a websocket. I decided to do this both as a way to start testing my midi
+file decoder for my final project but also to experiment with sending files to the esp32. The whole
+process was rather annoying because large transfers over websocket can get fragmented into multiple messages 
+and sending multiple kinds of messages also requires rigging up logic to determine the kind of message as well 
+as general websocket disconnecting difficulties. Additionally, the decoder is a bit limited: it only
+decodes one track at a time and requires that the track have only one pitch at a time and the interface 
+doesn't provide the names of the tracks (even though I do have logic setup to extract those) because I couldn't 
+be bothered to setup logic to distinguish between messages on the client side. And for anyone who
+wants to read a binary file / send binary data, be mindful of endianness, I didn't run into it here because 
+I already knew about it but be mindful, and look into terminal commands to read a binary file as hex values (or similar)
+(ex for macos: od -t x1 [file name])
+<video width="100%" controls>
+  <source src="website_recording.mp4" type="video/mp4">
+</video>
 
-<p class="margin">   </p>
-<div class="flexrow">
-  <a id="btn" href="wk9.zip" download>Download my files from this week!
-  </a>
-</div>
-<p class="margin">   </p>
+<pre><div class="code_background"><code>#include &lt;WiFi.h&gt;
+#include &lt;AsyncTCP.h&gt;
+#include &lt;ESPAsyncWebServer.h&gt;
+#include &lt;Arduino_JSON.h&gt;
+#include &lt;vector&gt;
+#include &lt;string&gt;
 
-<h4>Assignment: [Program something with IOT]</h4>
+
+class MIDIDecoder {
+  uint8_t &ast;bytes;
+  size_t num_bytes;
+  size_t byte_idx;
+  int16_t format;
+  int16_t num_tracks;
+  int16_t ticks_per_beat;
+
+  //note: only built to work with &ast;only&ast; 1 active note
+  bool ready;
+  uint64_t last_event_time;
+  size_t track_end;
+  int8_t active_note; // no note == -1
+  uint32_t micros_per_beat;
+
+  
+
+  uint8_t peek() {return bytes[byte_idx];}
+  uint8_t peek(size_t offset) {return bytes[byte_idx + offset];}
+  uint8_t pop() {return bytes[byte_idx++];}
+  uint16_t pop16() {
+    uint16_t out = pop() &lt;&lt; 8;
+    out |= pop();
+    return out;
+  }
+  uint32_t pop32() {
+    uint32_t out = pop16() &lt;&lt; 16;
+    out |= pop16();
+    return out;
+  }
+  uint32_t pop_vval() {
+    uint32_t val = 0;
+    bool flag = true;
+    while (flag) {
+      val &lt;&lt;= 7;
+      uint8_t next_byte = pop();
+      val |= next_byte & 0b01111111;
+      flag = (next_byte & 0b10000000) == 0b10000000;
+    }
+    return val;
+  }
+
+  void process_header() {
+    byte_idx = 0;
+    uint32_t midi_indicator = 0;
+    for (int i = 0; i &lt; 4; i++) {
+      midi_indicator &lt;&lt;= 8;
+      midi_indicator |= pop();
+    }
+    if (midi_indicator != 0x4d546864) {Serial.printf("invalid midi file: expected 0x4d546864 got %08x\n", midi_indicator); return;}
+    byte_idx += 4; //skipping length indicator since it is constant
+    format = pop16();
+    num_tracks = pop16();
+    ticks_per_beat = pop16();
+  }
+
+  size_t event_size() {
+    size_t size = 0;
+    size_t old_idx = byte_idx;
+    pop_vval();
+    size += byte_idx - old_idx;
+    uint8_t event_num = pop();
+    size += 1;
+    if (event_num &lt; 0b11110000) event_num &gt;&gt;= 4;
+    switch (event_num) {
+      case 0b1000: size += 2; break;
+      case 0b1001: size += 2; break;
+      case 0b1010: size += 2; break;
+      case 0b1011: size += 2; break;
+      case 0b1100: size += 1; break;
+      case 0b1101: size += 1; break;
+      case 0b1110: size += 2; break;
+      case 0b11110001: size += 1; break;
+      case 0b11110010: size += 2; break;
+      case 0b11110011: size += 1; break;
+      case 0b11110100: Serial.println("read undefined midi message"); break;
+      case 0b11110101: Serial.println("read undefined midi message"); break;
+      // the next few are all 0
+      case 0b11110000: break; // TODO, system exclusive message, 0xF7 terminated
+      case 0b11110111: break; // TODO, system exclusive message, 0xF7 terminated
+      case 0b11111111: {
+        size_t meta_event_start = byte_idx++;
+        size += pop_vval();
+        size += byte_idx - meta_event_start;
+      }
+    }
+    byte_idx = old_idx;
+    return size;
+  }
+
+  uint64_t ticks_to_micros(uint32_t ticks) {
+    return (uint64_t) ((double) micros_per_beat &ast; (double) ticks) / ((double) ticks_per_beat);
+  }
+
+  public:
+  MIDIDecoder() {
+    ready = false;
+  }
+
+  void attach_file(uint8_t &ast;bytes, size_t num_bytes) {
+    this-&gt;bytes = bytes;
+    this-&gt;num_bytes = num_bytes;
+    ready = false;
+    process_header();
+  }
+
+  std::vector&lt;std::string&gt; scan_tracks() {
+    byte_idx = 14; // file header is 14 bytes =&gt; moves to first track header
+    std::vector&lt;std::string&gt; out = std::vector&lt;std::string&gt;();
+    for (int i = 0; i &lt; num_tracks; i++) {
+      uint32_t midi_indicator = 0;
+      for (int i = 0; i &lt; 4; i++) {
+        midi_indicator &lt;&lt;= 8;
+        midi_indicator |= pop();
+      }
+      if (midi_indicator != 0x4d54726b) {Serial.printf("invalid midi track: expected 0x4d54726b got %08x\n", midi_indicator); return std::vector&lt;std::string&gt;(0);} 
+      size_t next_track_idx = byte_idx + (size_t) pop32();
+      while (byte_idx &lt; next_track_idx) {
+        size_t event_start = byte_idx;
+        pop_vval();
+        uint8_t event_num = pop();
+        if (event_num == 0xFF) {
+          event_num = pop();
+          if (event_num == 0x03) {
+            size_t length = pop_vval();
+            std::string name((char&ast;) &bytes[byte_idx], length);
+            out.push_back(name);
+            break;
+          }
+        }
+      }
+      if (out.size() &lt;= i) { // no track name found;
+        out.push_back("NO NAME");
+      }
+      byte_idx = next_track_idx;
+    }
+    return out;
+  }
+
+  void select_track(size_t idx) {
+    ready = true;
+    byte_idx = 14; // file header is 14 bytes =&gt; moves to first track header
+    for (size_t i = 0; i &lt; idx; i++) {
+      uint32_t midi_indicator = 0;
+      for (int i = 0; i &lt; 4; i++) {
+        midi_indicator &lt;&lt;= 8;
+        midi_indicator |= pop();
+      }
+      if (midi_indicator != 0x4d54726b) {Serial.printf("invalid midi track: expected 0x4d54726b got %08x\n", midi_indicator); return;} 
+      size_t length = (size_t) pop32();
+      byte_idx += length;
+    }
+    uint32_t midi_indicator = 0;
+    for (int i = 0; i &lt; 4; i++) {
+      midi_indicator &lt;&lt;= 8;
+      midi_indicator |= pop();
+    }
+    if (midi_indicator != 0x4d54726b) {Serial.printf("invalid midi track: expected 0x4d54726b got %08x\n", midi_indicator); return;} 
+    size_t length = (size_t) pop32();
+    track_end = byte_idx + length;
+    last_event_time = micros();
+    active_note = -1;
+    micros_per_beat = 500000; //2 BPS == 120 BPM
+  }
+
+  int8_t tick() {
+    if (ready) {
+      uint64_t current_time = micros();
+      size_t event_start = byte_idx;
+      uint64_t delay = ticks_to_micros(pop_vval());
+      while (current_time &gt;= last_event_time + delay) {
+        Serial.printf("offset: %07o\n", event_start);
+        uint8_t event_num = pop();
+        Serial.printf("event: %02x\n", event_num);
+        if (event_num &lt; 0b11110000) event_num &gt;&gt;= 4;
+        switch (event_num) {
+          case 0b1000: { // note off
+            active_note = -1;
+            pop(); //released key always causes complete silence
+            pop(); //velocity
+            break;
+          }
+          case 0b1001: { // note on
+            active_note = pop();
+            pop(); //velocity
+            break;
+          }
+          case 0b11111111: { // Meta event
+            event_num = pop();
+            switch (event_num) {
+              case 0x51: { // tempo change
+                byte_idx++; // already known 24 bit
+                micros_per_beat = pop() &lt;&lt; 16;
+                micros_per_beat |= pop() &lt;&lt; 8;
+                micros_per_beat |= pop();
+                break;
+              }
+            }
+            break;
+          }
+        }
+        byte_idx = event_start;
+        byte_idx += event_size();
+        if (byte_idx &gt;= track_end) ready = false;
+        event_start = byte_idx;
+        last_event_time += delay;
+        uint32_t ticks = pop_vval();
+        Serial.printf("tick delay: %d\n", ticks);
+        delay = ticks_to_micros(ticks);
+      }
+      byte_idx = event_start;
+      return active_note;
+    } else {
+      return -1;
+    }
+  }
+
+  bool is_ready() {return ready;}
+};
+
+// Replace with your network credentials
+const char&ast; ssid = "REDACTED";
+const char&ast; password = "REDACTED";
+
+String message = "";
+
+// Create AsyncWebServer object on port 80
+AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
+
+// Json Variable to Hold Sensor Readings
+JSONVar readings;
+
+// Timer variables
+unsigned long last_time = 0;
+unsigned long timer_delay = 100;
+
+std::vector&lt;uint8_t&gt; file;
+size_t file_idx;
+
+
+const char index_html[] PROGMEM = R"rawliteral(
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;Chart Data&lt;/title&gt;
+  &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
+   &lt;/head&gt;
+&lt;body&gt;
+  &lt;div class="topnav"&gt;
+    &lt;h3&gt;Remote MIDI Reader&lt;/h3&gt;
+  &lt;/div&gt;
+
+  &lt;div&gt;
+    &lt;div id='note_name'&gt;note number: Rest&lt;/div&gt;
+
+    &lt;div&gt;
+      Midi File:&lt;input id='file_input' type='file' accept='.mid,.midi'&gt;&lt;br&gt;
+      Track number:&lt;input id='track_input' type='number'&gt;&lt;br&gt;
+      &lt;input id='file_submit' type='button' value='submit'&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/body&gt;
+&lt;script&gt;
+var gateway = `ws://${window.location.hostname}/ws`;
+var websocket;
+var note_name = document.getElementById('note_name');
+var file_input = document.getElementById('file_input');
+var track_input = document.getElementById('track_input');
+var file_submit = document.getElementById('file_submit');
+file_submit.addEventListener('click', on_file_submit);
+
+window.addEventListener('load', onload);
+
+function on_file_submit(event) {
+  console.log('trying to send the file');
+  var files = file_input.files;
+  var track_num = new ArrayBuffer(4);
+  new DataView(track_num).setInt16(0, track_input.valueAsNumber, false);
+  if (files !== null) {
+    websocket.send('f');
+    websocket.send(files[0]);
+    console.log(files[0]);
+    websocket.send('t');
+    websocket.send(track_num);
+    console.log(track_num);
+  }
+  console.log('finished sending the file');
+}
+
+function onload(event) {
+    initWebSocket();
+}
+
+function initWebSocket() {
+    console.log('Trying to open a WebSocket connection...');
+    websocket = new WebSocket(gateway);
+    websocket.onopen = onOpen;
+    websocket.onclose = onClose;
+    websocket.onmessage = onMessage;
+}
+
+function onOpen(event) {
+    console.log('Connection opened');
+}
+
+function onClose(event) {
+    console.log('Connection closed');
+    setTimeout(initWebSocket, 2000);
+}
+
+function onMessage(event) {
+    console.log(event.data);
+    if (event.data &lt; 0) {
+      note_name.innerHTML = 'Note Name: Rest';
+    } else {
+      const octave = Math.floor(event.data / 12);
+      var name;
+      switch (event.data % 12) {
+        case 0: name = 'C'; break; 
+        case 1: name = 'C#/Db'; break; 
+        case 2: name = 'D'; break; 
+        case 3: name = 'D#/Eb'; break; 
+        case 4: name = 'E'; break; 
+        case 5: name = 'F'; break; 
+        case 6: name = 'F#/Gb'; break; 
+        case 7: name = 'G'; break; 
+        case 8: name = 'G#/Ab'; break; 
+        case 9: name = 'A'; break; 
+        case 10: name = 'A#/Bb'; break; 
+        case 11: name = 'B'; break; 
+      }
+      note_name.innerHTML = 'Note Name: ' + name + octave;
+    }
+}
+&lt;/script&gt;
+&lt;/html&gt;
+)rawliteral";
+
+MIDIDecoder decoder;
+
+// Initialize WiFi
+void initWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi ..");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+    delay(1000);
+  }
+  Serial.println(WiFi.localIP());
+}
+
+void notifyClients(String str) {
+  ws.textAll(str);
+}
+
+int ws_message_mode = 0;
+
+void handleWebSocketMessage(void &ast;arg, uint8_t &ast;data, size_t len) {
+  AwsFrameInfo &ast;info = (AwsFrameInfo&ast;)arg;
+  switch (ws_message_mode) {
+    case 0: {
+      char request_type = data[0];
+      switch (request_type) {
+        case 'f': { // file send
+          Serial.println("File: ");
+          ws_message_mode = 1;
+          break;
+        }
+        case 't': { // track select
+          Serial.println("Track: ");
+          ws_message_mode = 2;
+          break;
+        }
+        case 'n': { // note request
+          Serial.println("Note: ");
+          int note = decoder.tick();
+          Serial.println(note);
+          ws.textAll(String(note).c_str());
+          break;
+        }
+      }
+      break;
+    }
+    case 1: { // file data
+      Serial.println(info-&gt;len);
+      Serial.println(len);
+      Serial.println(info-&gt;index);
+      if (info-&gt;index == 0) {
+        file = std::vector&lt;uint8_t&gt;(info-&gt;len);
+        file_idx = 0;
+      }
+      memcpy(&file[file_idx], data, len);
+      file_idx += len;
+      if (file_idx == info-&gt;len) {
+        Serial.println("file finished");
+        decoder.attach_file(&file[0], file.size());
+        ws_message_mode = 0;
+      }
+      break;
+    }
+    case 2: { // track selection
+      // big endian
+      uint16_t track_num = data[0] &lt;&lt; 8;
+      track_num |= data[1];
+      Serial.println(track_num);
+      decoder.select_track(track_num);
+      ws_message_mode = 0;
+      break;
+    }
+  }
+}
+
+void onEvent(AsyncWebSocket &ast;server, AsyncWebSocketClient &ast;client, AwsEventType type, void &ast;arg, uint8_t &ast;data, size_t len) {
+  switch (type) {
+    case WS_EVT_CONNECT:
+      Serial.printf("WebSocket client #%u connected from %s\n", client-&gt;id(), client-&gt;remoteIP().toString().c_str());
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WebSocket client #%u disconnected\n", client-&gt;id());
+      break;
+    case WS_EVT_DATA:
+      handleWebSocketMessage(arg, data, len);
+      break;
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
+      break;
+  }
+}
+
+void initWebSocket() {
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
+}
+
+String processor(const String& var) {
+  Serial.println("PROCESSOR");
+  Serial.println(var);
+  if (var == "STATE") {
+    return "OFF";
+  }
+  return String();
+}
+
+void setup() {
+  // Serial port for debugging purposes
+  Serial.begin(115200);
+  initWiFi();
+  initWebSocket();
+
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest &ast; request) {
+    request-&gt;send_P(200, "text/html", index_html, processor);
+  });
+
+  server.begin();
+}
+
+void loop() {
+  if ((millis() - last_time) &gt; timer_delay) {
+    ws.textAll(String(decoder.tick()).c_str()); 
+    last_time = millis();
+  }
+  ws.cleanupClients();
+}</code></div></pre>
+
+
 
 
 
