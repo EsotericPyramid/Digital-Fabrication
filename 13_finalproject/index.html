@@ -26,12 +26,15 @@
 <h3>Final Project: Live Tuner</h3>
 a device to tell you whether are sharp or flat while playing a song<br>
 <br>
-[DEMO TBD]
+<video width="100%" controls>
+  <source src="demo.mp4" type="video/mp4">
+</video>
 <div>
   For my final project, I decided to make a live tuner which could tell you if you
   are off in any part of a song. Given my interest in singing, such a device could 
-  prove very useful.
-</div>
+  prove very useful. You can download all of the relevent files <a download href="tuner.zip">here</a>.
+</div><br>
+<br>
 <h4>How Tuning Works</h4>
 <div>
   While tuning, the mic's signal is constantly read and processed through some method
@@ -50,10 +53,11 @@ a device to tell you whether are sharp or flat while playing a song<br>
   <div class="indent">
     -  target note name (in SPN) (screen 1st line)<br>
     -  difference in cents between detected and target note (screen 2nd line)<br>
-    -  comparison between detected and target note (LEDs, left: flat, middle: on pitch, right: sharp)<br>
+    -  comparison between detected and target note (LEDs: left: flat, middle: on pitch, right: sharp)<br>
     -  if the tuner is paused (screen 4th line);
   </div>
-</div>
+</div><br>
+<br>
 <h4>Input Handling</h4>
 <div>
   Meanwhile, the buttons can be used to navigate & control the device. The left two
@@ -84,11 +88,15 @@ a device to tell you whether are sharp or flat while playing a song<br>
       -  generic pitch tuning Mode
     </div>
   </div>
-</div>
+</div><br>
 <br>
 <h4>Software:</h4>
 <div>
-  <a href="">Here</a> is a download of the full software including the Yin library.
+  There is quite alot of code for this (1000+ lines). I believe for the most part that most of these methods
+  and classes are straightforward in function (matching there name) aside from one thing. The Window classes 
+  (LiveTuningWindow, PitchTuningWindow, ExplorerWindow) are used polymorphically as just Window in Tuner, allowing them to
+  be fully swapped out. Each one represents the current window and functionallity of the tuner (ie. tuning vs file navigation).
+  These are swapped out by Tuner using the returned "window_code" from Window's tick function to know what the next window will be.
   <pre><div class="code_background" style="height: 800px;overflow: auto;"><code>#include &lt;ESP_I2S.h&gt;
 #include &lt;SPI.h&gt;
 #include &lt;Wire.h&gt;
@@ -1180,41 +1188,40 @@ void loop() {
   tuner.tick();
 }
 </code></div></pre>
-</div>
+</div><br>
+<br>
 <h4>Hardware / Bill of materials:</h4>
 <div class="code_background">
   device case:<br>
   <div class="indent">
     -  3mm plywood (7 pieces)<br>
-    -  held together with finger joints
-    -  4 long m2 screws & nuts (secures protoboard)
-    -  4 plastic spacers (for protoboard)
-    -  zipties (secure power bank) 
+    -  4 long m2 screws & nuts<br>
+    -  4 plastic spacers<br>
+    -  zipties 
   </div>
   circuitry:<br>
   <div class="indent">
     -  protoboard (1/2 length, 2x width)<br>
     -  wires<br>
+    -  solder<br>
     -  3 1 kΩ resistors<br>
     -  1 100 kΩ resistor<br>
-    -  microcontroller: esp32 dev module<br>
+    -  microcontroller (esp32-wroom)<br>
     -  usb power bank<br>
     -  inputs:<br>
     <div class="indent">
       - microphone (SPH0645) <br>
       - 4 buttons (toggle)<br>
-      - usb (part of microcontroller)<br>
     </div>
     -  outputs<br>
     <div class="indent">
-      -  oled screen (SSD1306 style)<br>
+      -  oled screen (SSD1306)<br>
       -  3 LEDs (relative pitch indicator) (2 red, 1 green)
     </div>
   </div>
-</div>
+</div><br>
 <br>
 <h4>Assembly:</h4>
-[IMG TBD]
 <div>
   All electrical components are soldered directly to the protoboard (note: the microcontroller is
   placed between the 2 sides to access all of its pins). Then sauder wires according to this (VCC = 3.3V):
@@ -1239,14 +1246,22 @@ D23          -> SPH0645 BCLK
 D22          -> SPH0645 LRCL
 SPH0645 DOUT -> D21
 SPH0645 DOUT -> 100 kΩ resistor -> Ground</div></pre>
+  <img src="circuitry.jpeg" width="100%"><br>
   Now take the middle wood panel (the one with 8 total holes) and use zipties through the square holes to secure
   the power bank. Then take the protoboard and, using m2 screws, nuts, and some spacers, attach it to the wood.
-  Then, using attach the remaining wood panels by simply pressing them onto a matching set of fingers (a rubber 
+  Then, attach the remaining wood panels by simply pressing them onto a matching set of fingers (a rubber 
   mallet can help attach and a chisel can be used to remove them). Then flash the microcontroller with the 
   code and whatever midi files you want to use. To flash the files, follow this 
   <a href="https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs/" target="_blank">tutorial (Arduino IDE 2)</a>
   or this <a href="https://randomnerdtutorials.com/esp32-littlefs-arduino-ide/" target="_blank">one (Arduino IDE 1)</a>.
+</div><br>
+<br>
+<h4>Bonus: Tuner Stand</h4>
+<div>
+  to hold the tuner and read its screen, I made this stand. Fairly straightforward to build, just cut the pieces
+  out of 4 mm cardboard and assemble.
 </div>
+<img src="tuner stand.jpeg" width="100%"><br>
 
 
 
